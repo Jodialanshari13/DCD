@@ -1,0 +1,486 @@
+---
+title: "GDP Per Capita Analysis"
+author: "Jodi Al Anshari Muttaqi"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+   toc: true
+   toc_float: true
+   highlight: zenburn
+   df_print: paged
+   theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = F,
+                      warning = F)
+options(scipen = 999)
+```
+
+![](gdppp.jpg)
+
+# Background
+
+In the era of globalization, economic issue is one of the most crucial areas which need improved by goverment. The government is aggressively promoting economic growth. It is one the most important indictators in analyzing the economic development which apllies in a country. By increasing growth economic means the welfare of their citizens will be increased as well.  One of the indicators of economic growth is GDP per capita.
+Gross Domestic Product (GDP) Per Capita is a metric that breaks down a country's economic output per person and is calculated by dividing the GDP of a country by its population per year. It is commonly a good reperesantation of a country's standard of living and the state of country's economy.It also describes how much citizens gain benefit from their country's economic income. There are several factors which influence GDP per capita like population, real gdp, litercay, industry, etc. .The formula for calculating gdp per capita is :
+
+![](gdp-per-capita-formula-u-s-compared-to-highest-and-lowest-3305848-v2-5b47747846e0fb0054929a4f.png)
+
+# Project Description
+
+## Goals
+
+The main purpose of this project is to analyze and identify which factors could affect GDP per capita each country. Furthermore, this project aims to predict economic condition of each country in the next few years which is shown by GDP per capita itself.
+
+By using regrresion models will analyze and identify how the predictor variables influence GDP per capita. It will specifically analyse how developed and developing country obtain their GDP. This project also try to figure out how developing or poor country struggle to increase their gdp while developed or rich country maintain their economic stability.
+
+
+# Data Pre Processing
+
+## Import Library
+```{r}
+library(tidyverse)
+library(factoextra)
+library(caret)
+library(ggplot2)
+library(GGally)
+library(MLmetrics)
+library(parsnip)
+library(ranger)
+library(yardstick)
+library(rsample)
+library(tune)
+```
+
+```{r}
+install.packages("tune")
+install.packages("vctrs",dependencies = T)
+devtools::install_github("r-lib/vctrs")
+pkgbuild::check_build_tools(debug = TRUE)
+```
+
+## Read Data
+```{r}
+gdp <- read.csv("data_input/countries of the world.csv")
+```
+
+The observation data consists of the following variables:
+
+* Country : The name of country
+* Regoin : The region of each country
+* Population : The numbers of population in each country
+* Area (sq. mi.) : The area of each country
+* Pop. Density (per sq. mi.) : The population density of each country per sq.mi
+* Coastline (coast/area ratio) : The coastline of each country
+* Net migration : The amount of net migration in each country
+* Infant mortality (per 1000 births) : The amount of infant mortality in each country
+* GDP ($ per capita)	:Gross Domestic Bruto in each country
+* Literacy (%)	: Literacy rate
+* Phones (per 1000)	: The amount of phone ownership
+* Arable (%) : The farmland of each country
+* Crops (%)	: Crops rate
+* Other (%)	: Other sectoral
+* Climate : The climate of each country
+* Birthrate	: The birthrate of each country
+* Deathrate	: The deathrate of each country
+* Agriculture : The agriculture sector rate of each country
+* Industry : The industry sector rate of each country
+* Service : The service sector rate of each country
+
+## Check Data Structure
+
+Before converting into numeric, gdp variable pattern should be replaced by "." 
+```{r}
+gdp <- sapply(gdp, gsub, pattern = ",", replacement = ".")
+
+gdp <- as.data.frame(gdp)
+
+str(gdp)
+```
+
+Then, convert some variables which are typically character into numeric
+```{r}
+gdp[, 3:20] <- lapply(gdp[, 3:20], as.numeric)
+str(gdp)
+```
+ 
+## Check missing value
+```{r}
+colSums(is.na(gdp))
+```
+It is found many missing values in some variables. Next step it should be fill by mean.
+
+Fill the missing value by mean of its variable
+```{r}
+gdp$Infant.mortality..per.1000.births. <- ifelse(is.na(gdp$Infant.mortality..per.1000.births.),
+                            ave(gdp$Infant.mortality..per.1000.births., FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Infant.mortality..per.1000.births.)
+
+gdp$Net.migration <- ifelse(is.na(gdp$Net.migration),
+                            ave(gdp$Net.migration, FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Net.migration)
+
+gdp$GDP....per.capita. <- ifelse(is.na(gdp$GDP....per.capita.),
+                            ave(gdp$GDP....per.capita., FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$GDP....per.capita.)
+
+gdp$Literacy.... <- ifelse(is.na(gdp$Literacy....),
+                            ave(gdp$Literacy...., FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Literacy....)
+
+gdp$Phones..per.1000. <- ifelse(is.na(gdp$Phones..per.1000.),
+                            ave(gdp$Phones..per.1000., FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Phones..per.1000.)
+
+gdp$Arable.... <- ifelse(is.na(gdp$Arable....),
+                            ave(gdp$Arable...., FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Arable....)
+
+gdp$Crops.... <- ifelse(is.na(gdp$Crops....),
+                            ave(gdp$Crops...., FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Crops....)
+
+gdp$Other.... <- ifelse(is.na(gdp$Other....),
+                            ave(gdp$Other...., FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Other....)
+
+gdp$Climate <- ifelse(is.na(gdp$Climate),
+                            ave(gdp$GDP....per.capita., FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Climate)
+
+gdp$Birthrate <- ifelse(is.na(gdp$Birthrate),
+                            ave(gdp$Birthrate, FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Birthrate)
+
+gdp$Deathrate <- ifelse(is.na(gdp$Deathrate),
+                            ave(gdp$Deathrate, FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Deathrate)
+
+gdp$Agriculture <- ifelse(is.na(gdp$Agriculture),
+                            ave(gdp$Agriculture, FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Agriculture)
+
+gdp$Industry <- ifelse(is.na(gdp$Industry),
+                            ave(gdp$Industry, FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Industry)
+
+gdp$Service <- ifelse(is.na(gdp$Service),
+                            ave(gdp$Service, FUN = function(x) mean(x, na.rm = TRUE)),
+                            gdp$Service)
+
+```
+
+Now, no missing value.
+
+```{r}
+colSums(is.na(gdp))
+```
+
+```{r}
+dim(gdp)
+```
+The data consists of 227 rows and 20 columns.
+
+```{r}
+
+```
+
+
+# Machine Learning Model
+
+This project is building by regression models. Why use regression model ? It is because intepretative model which can generate analysis and prediction results. Not only regression model, by using clustering this model will be built. It purposes to group the countries based on the their similarity. The dataset will be divided into 2 parts named data train and data test. Data train is used for building a model while data test is used for tuning model.
+
+# Exploratory Data Anlaysis
+
+```{r}
+ggcorr(gdp, label = TRUE, label_size = 2.9, label_color = "black", hjust = 0.92, layout.exp = 4.45)
+```
+
+The following plot is correlation plot that shows correlation between each variables.
+
+```{r}
+
+ranking <- gdp %>% 
+  group_by(Country) %>% 
+  summarise(gdp = sum(GDP....per.capita.),
+            pop = sum(Population)) %>% 
+  ungroup() %>% 
+  arrange(desc(gdp))
+
+ranking <- head(ranking, 10)
+
+library(plotly)
+library(ggplot2)
+  
+ggplot(ranking, aes(y = reorder(Country, gdp),
+                      x = gdp,
+                      fill= gdp))+
+  geom_col()+
+  geom_text(aes(label = paste(round(gdp), "")))+
+  # labs
+  labs(title = "TOP 10 GDP Per Capita", 
+        caption = "Source: Kaggle",
+       x = "gdp",
+       y = "Country",
+       fill = NULL) +
+  scale_fill_gradient(low = "skyblue", high = "purple") +
+  theme_minimal()
+```
+
+There are 7 europe countries which are in Top 10 GDP Per Capita. Three of them are nordic countries (Norway, Denmark, Iceland).
+
+```{r}
+Bottom5 <-  gdp %>% 
+   filter(GDP....per.capita. < 2000) %>%
+   group_by(Country) %>% 
+   summarise(
+   gdp = mean(GDP....per.capita.),
+   industry = mean(Industry)
+   ) %>% 
+   ungroup() %>% 
+   arrange(desc = F, gdp)
+
+Bottom5 <- head(Bottom5, 5)
+      
+      ggplot(Bottom5, aes(y = reorder(Country, gdp),
+                      x = gdp,
+                      fill= gdp))+
+  geom_col()+
+  geom_text(aes(label = paste(round(gdp), "")))+
+  # labs
+  labs(title = "Bottom 5 GDP Per Capita", 
+        caption = "Source: Kaggle",
+       x = "gdp",
+       y = "Country",
+       fill = NULL) +
+  scale_fill_gradient(low = "skyblue", high = "purple") +
+  theme_minimal()
+```
+The lowest GDP per capita are from Asia and Africa region.
+
+```{r}
+```
+```{r}
+rownames(gdp) <- gdp$Country
+gdp <- gdp %>% 
+  select(-Country)
+```
+
+
+* Cross Validation
+```{r}
+RNGkind(sample.kind = "Rounding")
+set.seed(100)
+
+gdp_intrain <- sample(nrow(gdp), nrow(gdp_new)*0.8)
+gdp_train <- gdp[gdp_intrain, ]
+gdp_test <- gdp[-gdp_intrain, ]
+```
+
+
+* Model
+
+```{r}
+set.seed(345)
+
+ctrl <- trainControl(method="repeatedcv", number = 5, repeats = 3)
+
+fb_forest <- train(GDP....per.capita. ~ ., data = gdp_train, method = "rf", trControl = ctrl)
+
+saveRDS(fb_forest, "fb_forest.RDS") # simpan model
+```
+
+```{r}
+library(randomForest)
+fb_forest$finalModel
+```
+
+```{r}
+varImp(fb_forest)
+```
+```{r}
+pred_rf <- predict(fb_forest, gdp_test)
+pred_rf <- cbind(data.frame(predict = pred_rf), 
+                 data.frame(actual = gdp_test$GDP....per.capita.))
+```
+
+```{r}
+MAPE <- MAPE(pred_rf$predict, pred_rf$actual)
+RMSE <- RMSE(pred_rf$predict, pred_rf$actual)
+```
+
+```{r}
+library(lime)
+
+set.seed(123)
+explainer <- lime(x = gdp_train %>% select(-GDP....per.capita.), 
+                  model = fb_forest)
+```
+
+```{r}
+explanation <- explain(x = gdp_test %>% select(-GDP....per.capita.) %>%
+                         slice(1:5),
+                       explainer = explainer, 
+                       n_features = 10)
+```
+
+```{r}
+plot_features(explanation)
+```
+
+## Tuning Model
+```{r}
+set.seed(1397)
+foldsX <- vfold_cv(gdp_train, 5)
+```
+
+```{r}
+rf.grid <- expand.grid(trees = c(350,400,450,500,550,600), mtry = 3:8)
+
+rf.setup <- rand_forest(trees = tune(), mtry = tune()) %>%
+  set_engine("ranger") %>%
+  set_mode("regression")
+
+rf.tune <- tune_grid(GDP....per.capita.~., model = rf.setup, resamples = foldsX,
+                     grid = rf.grid, metrics = metric_set(rmse,mape))
+
+show_best(rf.tune, maximize = T, metric = "mape")
+
+```
+
+```{r}
+rf.setup2 <- rand_forest(trees = 600, mtry = 5, mode = "regression") %>% 
+  set_engine("ranger") %>% 
+  fit(GDP....per.capita. ~., data = gdp_train)
+
+rf_predict2 <- predict(rf.setup2, gdp_test)
+MAPE(rf_predict2$.pred, gdp_test$GDP....per.capita.)
+```
+
+
+```{r}
+model_2 <- lm(formula = GDP....per.capita. ~ Phones..per.1000. + Infant.mortality..per.1000.births.	+ Agriculture + Birthrate + Net.migration	+ Literacy.... + Crops....	 , gdp_train)
+
+summary(model_2)
+```
+
+```{r}
+gdp$pred <- predict(model_2, newdata = data.frame(Phones..per.1000. = gdp$GDP....per.capita., Infant.mortality..per.1000.births. =gdp$GDP....per.capita., Agriculture = gdp$GDP....per.capita., Birthrate = gdp$GDP....per.capita., Net.migration = gdp$GDP....per.capita., Literacy.... = gdp$GDP....per.capita., Crops.... = gdp$GDP....per.capita.))
+```
+
+```{r}
+pred2 <- predict(model_2, gdp_test)
+
+MAPE(y_pred = pred2, y_true = gdp_test$GDP....per.capita.)
+```
+
+
+```{r}
+pred_crime1 <- predict(model_2, newdata = data.frame(GDP....per.capita. = gdp$GDP....per.capita.))
+predict(object = model_2, newdata = data.frame(GDP....per.capita. = gdp$GDP....per.capita.))
+
+pred_gdp2 <- predict(model_2, newdata = data.frame(GDP....per.capita. = gdp_new$GDP....per.capita.))
+```
+
+```{r}
+lm.none <- lm(GDP....per.capita. ~1, gdp)
+# model dengan semua prediktor
+lm.all <- lm(GDP....per.capita. ~., gdp)
+
+model_1 <- step(lm.all, direction = "backward")
+```
+```{r}
+library(dplyr)
+gdp_new <- read.csv("gdp_percapita.csv")
+
+rownames(gdp_new) <- gdp_new$Country
+gdp_new <- gdp_new %>% 
+  select(-Country)
+```
+
+```{r}
+gdp_clust <- gdp_new %>% 
+  select(-c(X, Region))
+
+gdp_clust <- scale(gdp_clust)
+gdp_clust <- as.data.frame(gdp_clust)
+```
+
+```{r}
+library(factoextra)
+fviz_nbclust(gdp_clust, kmeans, method = "wss")
+```
+```{r}
+cluster_gdp <- kmeans(gdp_clust, 3)
+
+fviz_cluster(cluster_gdp, data = gdp_clust)
+```
+```{r}
+profiling_gdp <- gdp_clust %>% 
+  dplyr::mutate(cluster = as.factor(cluster_gdp$cluster)) %>% 
+  group_by(cluster) %>% 
+  summarise_all(mean)
+```
+
+```{r}
+profiling_gdp %>% 
+  pivot_longer(cols = -1, names_to = "type", values_to = "score") %>% 
+  ggplot(aes(x = cluster, y = score)) +
+  geom_col(aes(fill = cluster)) +
+  facet_wrap(~type)
+```
+```{r}
+profiling_gdp %>% 
+  pivot_longer(cols = -1, names_to = "type", values_to = "score") %>% 
+   ggplot(aes(x = type, y = score)) +
+   geom_col(aes(fill = type)) +
+   facet_wrap(~cluster)
+```
+```{r}
+gdp_clust %>% 
+  rownames_to_column("Country") %>% 
+  mutate(cluster = as.factor(cluster_gdp$cluster)) %>% 
+  filter(Country == "Germany") %>% 
+  select(cluster)
+
+
+```
+```{r}
+gdp_clust %>% 
+  rownames_to_column("Country") %>%
+  mutate(cluster = as.factor(cluster_gdp$cluster)) %>% 
+  filter(cluster == 2) %>% 
+  select(Country)
+
+```
+```{r}
+library(neuralnet)
+```
+```{r}
+set.seed(123)
+model_nn1 <- neuralnet(GDP....per.capita. ~ ., # formula
+                       data = gdp_clust, # data
+                       hidden = 3,
+                       rep = 4 
+                       )
+
+plot(model_nn1, rep = "best")
+```
+```{r}
+pred_rf <- predict(model_nn1, gdp_test)
+pred_rf <- cbind(data.frame(predict = pred_rf), 
+                 data.frame(actual = gdp_test$GDP....per.capita.))
+```
+
+```{r}
+
+MAPE <- MAPE(pred_rf$predict, pred_rf$actual)
+RMSE <- RMSE(pred_rf$predict, pred_rf$actual)
+```
+
+
+# References
+
+* https://www.thebalance.com/gdp-per-capita-formula-u-s-compared-to-highest-and-lowest-3305848
+
+* https://www.kaggle.com/stieranka/predicting-gdp-world-countries
